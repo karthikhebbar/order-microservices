@@ -1,0 +1,68 @@
+server:
+  port: 8222
+
+spring:
+  datasource:
+    username: sa
+    password: welcome
+    url: jdbc:h2:mem:orders_db
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: create
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://dev-7858070.okta.com/oauth2/default
+          jwk-set-uri: https://dev-7858070.okta.com/oauth2/default/v1/keys
+  cloud:
+    stream:
+      bindings:
+        orders:
+          destination: orders-topic
+          content-type: application/json
+      kafka:
+        binder:
+          brokers: 65.0.4.31:9092
+          configuration:
+            request:
+              timeout:
+                ms: 20000
+            retry:
+              backoff:
+                ms: 500
+      default-binder: kafka
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  health:
+    circuitbreakers:
+      enabled: true
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      inventoryservice:
+        register-health-indicator: true
+        ring-buffer-size-in-closed-state: 5
+        ring-buffer-size-in-half-open-state: 3
+        wait-duration-in-open-state: 30s
+        failure-rate-threshold: 50
+        record-exceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.client.ResourceAccessException
+          - java.lang.IllegalStateException
+          - org.springframework.web.reactive.function.client.WebClientRequestException
+
+ 
+            

@@ -1,0 +1,161 @@
+apiVersion: v1
+type: kubernetes.io/dockerconfigjson
+kind: Secret
+metadata:
+  name: docker-credentials
+data:
+  .dockerconfigjson: eyJhdXRocyI6eyJodHRwczovL2luZGV4LmRvY2tlci5pby92MS8iOnsidXNlcm5hbWUiOiJjbGFzc3BhdGhpbyIsInBhc3N3b3JkIjoiV2VsY29tZTQ0IiwiZW1haWwiOiJwcmFkZWVwQGNsYXNzcGF0aC5pbyIsImF1dGgiOiJZMnhoYzNOd1lYUm9hVzg2VjJWc1kyOXRaVFEwIn19fQ==
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: order-microservice-cm
+data:
+  application-dev.yml: |-
+    server:
+      port: 8222
+    spring:
+      datasource:
+        url: jdbc:h2:mem:orders_db
+      jpa:
+        show-sql: false
+        hibernate:
+          ddl-auto: create
+      security:
+        oauth2:
+          resourceserver:
+            jwt:
+              issuer-uri: https://dev-7858070.okta.com/oauth2/default
+              jwk-set-uri: https://dev-7858070.okta.com/oauth2/default/v1/keys
+      cloud:
+        stream:
+          bindings:
+            input:
+              destination: orders-topic
+              content-type: application/json
+          kafka:
+            binder:
+              brokers: 65.0.4.31:9092
+              configuration:
+                request:
+                  timeout:
+                    ms: 20000
+                retry:
+                  backoff:
+                    ms: 500
+          default-binder: kafka           
+    application-prod.yml: |-
+      server:
+        port: 8222
+      spring:
+        datasource:
+          url: jdbc:h2:mem:orders_db
+        jpa:
+          show-sql: false
+          hibernate:
+            ddl-auto: create
+---
+apiVersion: v1
+type: Opaque
+kind: Secret
+metadata:
+  name: db-credentials
+data:
+  password: d2VsY29tZQ==
+  username: c2E=
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: order-microservice-rs
+  labels:
+    app: order-microserce-rs
+    tier: backend
+    version: 1.0.0
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: order-microservice
+  template:
+    metadata:
+      labels:
+        app: order-microservice
+    spec:
+      containers:
+      - image: classpathio/order-microservice
+        name: order-microservice-container
+        ports:
+        - containerPort: 8222
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: dev
+        - name: SPRING_DATASOURCE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: username
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: password
+        volumeMounts:
+        - name: app-config
+          mountPath: /app/config
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8222
+          initialDelaySeconds: 10
+          failureThreshold: 3
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8222
+          initialDelaySeconds: 10
+          failureThreshold: 3
+          periodSeconds: 10
+              
+      volumes:
+      - name: app-config
+        configMap:
+          name: order-microservice-cm
+      imagePullSecrets:
+      - name: docker-credentials   
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+spec:
+  selector:
+    app: order-microservice
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8222
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: application-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: pradeep.classpath.io
+      http:
+        paths:
+          - path: /orders(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: order-service
+                port:
+                  number: 80 
+
+
+      
