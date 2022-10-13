@@ -41,6 +41,7 @@ spring:
             retry:
               backoff:
                 ms: 500
+          autoCreateTopics: false
       default-binder: kafka
 
 management:
