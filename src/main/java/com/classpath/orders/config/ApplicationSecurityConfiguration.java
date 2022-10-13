@@ -21,7 +21,7 @@ public class ApplicationSecurityConfiguration extends WebSecurityConfigurerAdapt
 		http.authorizeRequests().antMatchers("/login**", "/api/state/**", "/logout**", "/h2-console/**").permitAll()
 				.antMatchers(HttpMethod.GET, "/api/v1/orders**", "/api/v1/orders/**")
 				.hasAnyRole("Everyone", "super_admins", "admins").antMatchers(HttpMethod.POST, "/api/v1/orders**")
-				.hasAnyRole("super_admins", "admins").antMatchers(HttpMethod.DELETE, "/api/v1/orders/**")
+				.hasAnyRole("admins").antMatchers(HttpMethod.DELETE, "/api/v1/orders/**")
 				.hasRole("super_admins").and().oauth2ResourceServer().jwt();
 	}
 
